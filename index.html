@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taiwan Postal Code CSV Processor - Browser Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+            background: #f8f9fa;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        .region-data {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .region-header {
+            font-weight: bold;
+            color: #007bff;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #f5c6cb;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #c3e6cb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .download-link {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            margin: 2px;
+        }
+        .download-link:hover {
+            background: #218838;
+        }
+        #sampleData {
+            width: 100%;
+            height: 150px;
+            font-family: monospace;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏣 Taiwan Postal Code CSV Processor</h1>
+    <p>Upload a CSV file with Taiwan postal codes and quantities to process and group by regions.</p>
+
+    <div class="container">
+        <h2>📁 File Upload</h2>
+        <div class="upload-area">
+            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+            <p>Click to select a CSV file or drag and drop here</p>
+            <button onclick="document.getElementById('csvFile').click()">Select CSV File</button>
+        </div>
+        
+        <h3>📝 Sample Data Format</h3>
+        <p>Your CSV should have columns: <code>郵遞區號,數量</code> or <code>postal_code,quantity</code></p>
+        <textarea id="sampleData" readonly>郵遞區號,數量
+100,50
+101,75
+102,30
+200,120
+220,80
+300,95
+320,40
+400,200
+407,150
+500,90
+600,110
+700,180
+800,60
+900,25
+950,35</textarea>
+        <br>
+        <button onclick="processSampleData()">🧪 Process Sample Data</button>
+        <button onclick="downloadSample()">💾 Download Sample CSV</button>
+    </div>
+
+    <div id="results" class="results"></div>
+
+    <script src="csvProcessor.js"></script>
+    <script>
+        const processor = new TaiwanPostalProcessor();
+        let processedResult = null;
+
+        // File upload handling
+        document.getElementById('csvFile').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    processCSVData(e.target.result, file.name);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Drag and drop handling
+        const uploadArea = document.querySelector('.upload-area');
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#007bff';
+            uploadArea.style.background = '#f8f9fa';
+        });
+
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            uploadArea.style.background = '';
+        });
+
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            uploadArea.style.background = '';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.endsWith('.csv')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    processCSVData(e.target.result, files[0].name);
+                };
+                reader.readAsText(files[0]);
+            }
+        });
+
+        function processSampleData() {
+            const sampleData = document.getElementById('sampleData').value;
+            processCSVData(sampleData, 'sample_data.csv');
+        }
+
+        function processCSVData(csvData, filename) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>🔄 Processing CSV data...</p>';
+
+            try {
+                const result = processor.processCSV(csvData);
+                processedResult = result;
+
+                if (result.success) {
+                    displayResults(result, filename);
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            <h3>❌ Processing Failed</h3>
+                            <p>${result.error}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Processing Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayResults(result, filename) {
+            const resultsDiv = document.getElementById('results');
+            
+            let html = `
+                <div class="success">
+                    <h3>✅ Processing Completed Successfully</h3>
+                    <p>File: <strong>${filename}</strong></p>
+                    <p>Processed at: ${new Date(result.processedAt).toLocaleString()}</p>
+                </div>
+
+                <div class="container">
+                    <h3>📊 Summary</h3>
+                    <table>
+                        <tr><td><strong>Total Records</strong></td><td>${result.summary.totalRecords}</td></tr>
+                        <tr><td><strong>Total Quantity</strong></td><td>${result.summary.totalQuantity.toLocaleString()}</td></tr>
+                        <tr><td><strong>Active Regions</strong></td><td>${result.summary.activeRegions} out of 9</td></tr>
+                    </table>
+                </div>
+
+                <div class="container">
+                    <h3>🗾 Regional Distribution</h3>
+            `;
+
+            for (let i = 1; i <= 9; i++) {
+                const region = result.summary.regionBreakdown[i];
+                if (region.records > 0) {
+                    html += `
+                        <div class="region-data">
+                            <div class="region-header">
+                                Region ${i}: ${region.name}
+                            </div>
+                            <table>
+                                <tr><td><strong>Records</strong></td><td>${region.records}</td></tr>
+                                <tr><td><strong>Total Quantity</strong></td><td>${region.quantity.toLocaleString()}</td></tr>
+                                <tr><td><strong>Percentage</strong></td><td>${region.percentage}%</td></tr>
+                            </table>
+                            <a href="#" class="download-link" onclick="downloadRegionCSV(${i})">
+                                💾 Download Region ${i} CSV
+                            </a>
+                        </div>
+                    `;
+                }
+            }
+
+            html += `
+                </div>
+                <div class="container">
+                    <h3>💾 Download All Regional Files</h3>
+                    <button onclick="downloadAllCSVs()">📦 Download All CSV Files as ZIP</button>
+                    <button onclick="downloadSummaryReport()">📋 Download Summary Report</button>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function downloadRegionCSV(regionNum) {
+            if (!processedResult) return;
+            
+            const csvFile = processedResult.csvExports[regionNum];
+            const blob = new Blob([csvFile.content], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = csvFile.filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function downloadSample() {
+            const sampleData = document.getElementById('sampleData').value;
+            const blob = new Blob([sampleData], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'sample_postal_data.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function downloadSummaryReport() {
+            if (!processedResult) return;
+            
+            const summary = processedResult.summary;
+            const report = `Taiwan Postal Code Processing Summary
+Generated at: ${processedResult.processedAt}
+
+Total Records Processed: ${summary.totalRecords}
+Total Quantity: ${summary.totalQuantity}
+Active Regions: ${summary.activeRegions}/9
+
+Regional Distribution:
+${Object.keys(summary.regionBreakdown).map(regionNum => {
+                const region = summary.regionBreakdown[regionNum];
+                return `Region ${regionNum} (${region.name}): ${region.records} records, ${region.quantity} quantity (${region.percentage}%)`;
+            }).join('\n')}`;
+
+            const blob = new Blob([report], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'processing_summary.txt';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function downloadAllCSVs() {
+            alert('ZIP download functionality would require additional libraries. Individual CSV downloads are available above.');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "taiwan-postal-csv-processor",
+  "version": "1.0.0",
+  "description": "JavaScript library for processing CSV files with Taiwan postal codes and quantities",
+  "main": "csvProcessor.js",
+  "scripts": {
+    "test": "node test.js",
+    "demo": "node demo.js"
+  },
+  "keywords": [
+    "csv",
+    "taiwan",
+    "postal-code",
+    "data-processing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
